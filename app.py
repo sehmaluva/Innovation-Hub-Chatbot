@@ -12,7 +12,6 @@ from routes.orders import orders_bp
 from routes.portfolio import portfolio_bp
 from routes.twilio_status import status_bp
 from routes.account import account_bp
-from routes.nl_sql import nl_sql_bp
 
 load_dotenv()
 
@@ -48,7 +47,6 @@ app.register_blueprint(orders_bp)
 app.register_blueprint(portfolio_bp)
 app.register_blueprint(status_bp)
 app.register_blueprint(account_bp)
-app.register_blueprint(nl_sql_bp)
 
 @app.route("/health", methods=["GET"])
 def health():

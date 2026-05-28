@@ -117,6 +117,7 @@ Set status callback URL to:
 | POST | /api/orders/ | Place BUY/SELL order |
 | GET | /api/orders/<phone_number> | Fetch recent order history |
 | GET | /api/portfolio/<phone_number> | Fetch portfolio holdings |
+| GET | /api/account/<phone_number>/balance | Check cash balance |
 
 ## How The System Works
 
@@ -149,11 +150,14 @@ Set status callback URL to:
 - routes/prices.py, routes/orders.py, routes/portfolio.py
     JSON APIs for prices, orders, and holdings.
 
+- routes/account.py
+    JSON API for checking account cash balances.
+
 - routes/twilio_status.py
     Receives Twilio delivery callbacks for outbound messages.
 
 - routes/speech_to_text.py
-    Downloads Twilio audio media and sends it to OpenAI transcription API.
+    Downloads Twilio audio media and sends it to Gemini transcription API.
 
 ## Supported Intent Examples
 
@@ -176,7 +180,7 @@ Set status callback URL to:
     - Verify Twilio webhook points to /webhook
 
 - Voice note not transcribed:
-    - Confirm OPENAI_API_KEY is set
+    - Confirm GEMINI_API_KEY is set
     - Confirm TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN are valid
 
 ## Run A Quick Local API Check
@@ -189,3 +193,12 @@ curl -X POST http://localhost:5000/api/orders/ \
     -H "Content-Type: application/json" \
     -d '{"phone_number":"+260977123456","symbol":"ZANACO","order_type":"BUY","quantity":10}'
 ```
+
+## 5) Running With Docker
+
+A `Dockerfile` and `docker-compose.yml` are provided for containerized deployment.
+
+```bash
+docker-compose up --build
+```
+This maps port 5000 and starts the bot inside a lightweight Linux container. It will automatically read credentials from your `.env` file via Docker Compose.

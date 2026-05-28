@@ -73,6 +73,15 @@ def transcribe_voice_note(media_url: str) -> str:
 
     try:
         client = genai.Client(api_key=gemini_key)
+
+        # We give the AI transcriber context about what to expect to improve accuracy
+        prompt = (
+            "You are transcribing audio for the Innovation Hub WhatsApp trading bot. "
+            "Expect phrases about stock trading, checking balances, and these common tickers: "
+            "ZANACO, ZCCM, ZSUG, PUMA, NANGA, BATA, PRIMA, LAFARGE. "
+            "Transcribe this audio precisely. Return nothing but the transcription."
+        )
+
         response = client.models.generate_content(
             model=model,
             contents=[
@@ -80,7 +89,7 @@ def transcribe_voice_note(media_url: str) -> str:
                     data=audio_bytes,
                     mime_type=content_type,
                 ),
-                "Transcribe this audio precisely. Return nothing but the transcription.",
+                prompt,
             ],
         )
         text = response.text.strip() if response.text else ""
