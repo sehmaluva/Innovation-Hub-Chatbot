@@ -102,6 +102,13 @@ _SELL_TRIGGERS = (
     "dump",
 )
 
+_BALANCE_TRIGGERS = (
+    "balance",
+    "cash",
+    "how much money",
+    "funds",
+)
+
 _PRICE_SINGLE_TRIGGERS = (
     "price of",
     "price for",
@@ -184,6 +191,18 @@ def _get_or_create_user_id(cursor: Cursor, phone_number: str) -> int:
     if not row:
         raise RuntimeError("Could not read the inserted user ID from SQL Server.")
     return int(row[0])
+
+def get_balance(phone_number: str) -> float | None:
+    normalized = normalize_phone(phone_number)
+    with get_connection() as (_, cursor):
+        cursor.execute(
+            "SELECT cash_balance FROM dbo.Users WHERE phone_number = ? AND is_active = 1",
+            (normalized,)
+        )
+        row = cursor.fetchone()
+        if not row:
+            return None
+        return float(row[0])
 
 
 def _fetch_instrument(cursor: Cursor, ticker_code: str) -> dict[str, Any] | None:
@@ -370,6 +389,9 @@ def parse_message(text: str) -> dict[str, Any]:
 
     if _contains_any(cleaned, _PORTFOLIO_TRIGGERS):
         return {"intent": "portfolio"}
+
+    if _contains_any(cleaned, _BALANCE_TRIGGERS):
+        return {"intent": "balance"}
 
     if _contains_any(cleaned, _HISTORY_TRIGGERS):
         return {
@@ -622,6 +644,20 @@ def place_order(
 
         current_price = latest_price["last_price"]
         holding = _fetch_holding(cursor, user_id, instrument["instrument_id"])
+        
+        # Check cash balance for BUY
+        cursor.execute("SELECT cash_balance FROM dbo.Users WHERE user_id = ?", (user_id,))
+        cash_row = cursor.fetchone()
+        cash_balance = float(cash_row[0]) if cash_row else 0.0
+        
+        total_value = current_price * quantity
+
+        if order_type == "BUY":
+            if cash_balance < total_value:
+                return {
+                    "ok": False,
+                    "message": f"Insufficient funds. This order costs {format_money(total_value)}, but you only have {format_money(cash_balance)}."
+                }
 
         if order_type == "SELL":
             owned = holding["quantity"] if holding else 0
@@ -668,7 +704,10 @@ def place_order(
             }
         order_id = int(row[0])
 
-    total_value = current_price * quantity
+        # Update cash balance
+        new_cash_balance = cash_balance - total_value if order_type == "BUY" else cash_balance + total_value
+        cursor.execute("UPDATE dbo.Users SET cash_balance = ? WHERE user_id = ?", (new_cash_balance, user_id))
+
     remaining = updated_holding["quantity"]
     average_cost = updated_holding["avg_cost"]
 
@@ -786,6 +825,12 @@ def build_reply(phone_number: str, text: str) -> str:
 
     if intent == "portfolio":
         return format_portfolio_text(get_portfolio(phone_number))
+
+    if intent == "balance":
+        balance = get_balance(phone_number)
+        if balance is None:
+            return "I could not find your account. Please check your phone number registration."
+        return f"Your current cash balance is {format_money(balance)}."
 
     if intent == "history":
         limit = parsed.get("limit") or 10

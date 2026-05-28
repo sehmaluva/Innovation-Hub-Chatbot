@@ -52,16 +52,15 @@ TWILIO_AUTH_TOKEN=your_twilio_auth_token
 TWILIO_PHONE_NUMBER=whatsapp:+14155238886
 TWILIO_STATUS_CALLBACK_URL=https://your-public-url/twilio-status
 
-OPENAI_API_KEY=your_openai_api_key
-OPENAI_TRANSCRIPTION_MODEL=whisper-1
-OPENAI_TRANSCRIPTION_LANGUAGE=en
+GEMINI_API_KEY=your_gemini_api_key
+GEMINI_MODEL=gemini-2.5-flash # Optional, defaults to gemini-2.5-flash if not set
 
 PORT=5000
 FLASK_DEBUG=true
 ```
 
 Notes:
-- OPENAI_API_KEY is only needed for voice-note transcription.
+- GEMINI_API_KEY is only needed for voice-note transcription.
 - TWILIO_STATUS_CALLBACK_URL is optional but recommended for delivery tracking.
 
 ## 2) Database Setup
