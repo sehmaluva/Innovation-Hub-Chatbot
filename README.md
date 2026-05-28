@@ -1,75 +1,192 @@
-# WhatsApp Trading Bot — Starter Code
+# Innovation Hub Chatbot
 
-A working WhatsApp chatbot built with **Flask + Twilio + MSSQL**.
+WhatsApp-based trading assistant built with Flask, Twilio, and SQL Server.
 
-Users interact via a simple numbered menu or direct commands:
+This README focuses on:
+1. How to run the system locally
+2. How the system works end to end
 
-```
-Reply with:
-1 - View all prices
-2 - View my portfolio
-3 - My order history
+## What This App Does
 
-BUY 100 ZANACO   — place a buy order
-SELL 50 ZCCM     — place a sell order
-```
+Users send WhatsApp messages such as:
+- 1 (show all prices)
+- 2 (show portfolio)
+- 3 (show order history)
+- buy 100 ZANACO
+- sell 50 ZCCM
+- price of ZSUG
 
----
+The app parses intent, reads/writes data in SQL Server, and responds through Twilio.
 
-## Project structure
+## Prerequisites
 
-```
-challenge-starter/
-├── app.py                      # Flask entry point
-├── requirements.txt
-├── .env.example
-│
-├── database/
-│   ├── schema.sql              # Tables: Users, Instruments, Prices, Orders, Portfolio
-│   ├── seed_data.sql           # Sample instruments, prices, demo users
-│   └── stored_procedures.sql  # sp_GetAllPrices, sp_PlaceOrder, sp_GetPortfolio, ...
-│
-├── models/
-│   └── db.py                   # MSSQL connection helper
-│
-└── routes/
-    ├── webhook.py              # POST /webhook  — Twilio inbound handler
-    ├── prices.py               # GET  /api/prices/, /api/prices/<symbol>
-    ├── orders.py               # POST /api/orders/, GET /api/orders/<phone>
-    └── portfolio.py            # GET  /api/portfolio/<phone>
-```
+Install these first:
+1. Python 3.10+
+2. SQL Server (local or remote)
+3. ODBC Driver 18 for SQL Server
+4. A Twilio account with WhatsApp Sandbox or a WhatsApp-enabled number
+5. Optional: ngrok (for exposing local webhook URLs)
 
----
+## 1) Environment Setup
 
-## API endpoints
-
-| Method | URL | Description |
-|---|---|---|
-| GET | `/health` | Health check |
-| GET | `/api/prices/` | All instrument prices |
-| GET | `/api/prices/<symbol>` | Single instrument price |
-| POST | `/api/orders/` | Place a BUY or SELL order |
-| GET | `/api/orders/<phone>` | Order history for a user |
-| GET | `/api/portfolio/<phone>` | Holdings and P&L for a user |
-| POST | `/webhook` | Twilio WhatsApp webhook |
-
----
-
-## Quick start
+Create and activate a virtual environment, then install dependencies:
 
 ```bash
-python -m venv venv && source venv/bin/activate
+python -m venv .venv
+source .venv/bin/activate
 pip install -r requirements.txt
-cp .env.example .env          # fill in your credentials
+```
+
+Create a .env file in the project root with at least the following keys:
+
+```dotenv
+MSSQL_SERVER=127.0.0.1
+MSSQL_PORT=1433
+MSSQL_DATABASE=Chatbot
+MSSQL_USERNAME=sa
+MSSQL_PASSWORD=your_password
+MSSQL_ODBC_DRIVER=ODBC Driver 18 for SQL Server
+
+TWILIO_ACCOUNT_SID=your_twilio_account_sid
+TWILIO_AUTH_TOKEN=your_twilio_auth_token
+TWILIO_PHONE_NUMBER=whatsapp:+14155238886
+TWILIO_STATUS_CALLBACK_URL=https://your-public-url/twilio-status
+
+OPENAI_API_KEY=your_openai_api_key
+OPENAI_TRANSCRIPTION_MODEL=whisper-1
+OPENAI_TRANSCRIPTION_LANGUAGE=en
+
+PORT=5000
+FLASK_DEBUG=true
+```
+
+Notes:
+- OPENAI_API_KEY is only needed for voice-note transcription.
+- TWILIO_STATUS_CALLBACK_URL is optional but recommended for delivery tracking.
+
+## 2) Database Setup
+
+Run SQL scripts in this order:
+1. database/schema.sql
+2. database/seed_data.sql
+3. database/stored_procedures.sql
+
+You can run them manually in SQL Server tools, or use the helper script:
+
+```bash
+python scripts/run_mssql.py --env-file .env --yes
+```
+
+## 3) Start The App
+
+```bash
 python app.py
 ```
 
-Database setup (SQL Server — run in order):
+Expected local URL:
+- http://localhost:5000
 
-```
-database/schema.sql
-database/seed_data.sql
-database/stored_procedures.sql
+Quick health check:
+
+```bash
+curl http://localhost:5000/health
 ```
 
-See [CHALLENGE.md](CHALLENGE.md) for the full challenge brief.
+## 4) Connect Twilio To Local App
+
+If running locally, expose port 5000:
+
+```bash
+ngrok http 5000
+```
+
+Then configure your Twilio WhatsApp webhook URL to:
+- https://your-ngrok-url/webhook
+
+Set status callback URL to:
+- https://your-ngrok-url/twilio-status
+
+## API Endpoints
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | /health | Service health check |
+| POST | /webhook | Incoming WhatsApp webhook from Twilio |
+| POST | /twilio-status | Delivery status callback from Twilio |
+| GET | /api/prices/ | List latest prices |
+| GET | /api/prices/<symbol> | Get one instrument price |
+| POST | /api/orders/ | Place BUY/SELL order |
+| GET | /api/orders/<phone_number> | Fetch recent order history |
+| GET | /api/portfolio/<phone_number> | Fetch portfolio holdings |
+
+## How The System Works
+
+### Request Flow
+
+1. User sends a WhatsApp message.
+2. Twilio calls POST /webhook.
+3. App reads message text (or transcribes audio if voice note).
+4. Message parser classifies intent (prices, portfolio, history, buy, sell, help).
+5. Service layer queries or updates SQL Server.
+6. App returns TwiML response.
+7. Twilio delivers reply to user.
+
+### Core Components
+
+- app.py
+    Registers Flask app, CORS, logging, and all route blueprints.
+
+- routes/webhook.py
+    Twilio webhook handler. Accepts inbound messages, handles optional voice-note transcription, and sends TwiML responses.
+
+- routes/services.py
+    Main business logic:
+    - intent parsing
+    - symbol/quantity extraction
+    - SQL Server connection and queries
+    - order placement and portfolio updates
+    - response text formatting
+
+- routes/prices.py, routes/orders.py, routes/portfolio.py
+    JSON APIs for prices, orders, and holdings.
+
+- routes/twilio_status.py
+    Receives Twilio delivery callbacks for outbound messages.
+
+- routes/speech_to_text.py
+    Downloads Twilio audio media and sends it to OpenAI transcription API.
+
+## Supported Intent Examples
+
+- show prices
+- price of ZANACO
+- buy 100 ZSUG
+- sell 50 ZCCM
+- my portfolio
+- my orders
+- help
+
+## Troubleshooting
+
+- Database connection errors:
+    - Verify MSSQL_* values in .env
+    - Confirm SQL Server is reachable and ODBC Driver 18 is installed
+
+- Twilio webhook not receiving traffic:
+    - Confirm ngrok is running
+    - Verify Twilio webhook points to /webhook
+
+- Voice note not transcribed:
+    - Confirm OPENAI_API_KEY is set
+    - Confirm TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN are valid
+
+## Run A Quick Local API Check
+
+```bash
+curl http://localhost:5000/api/prices/
+curl http://localhost:5000/api/portfolio/+260977123456
+curl "http://localhost:5000/api/orders/+260977123456?limit=5"
+curl -X POST http://localhost:5000/api/orders/ \
+    -H "Content-Type: application/json" \
+    -d '{"phone_number":"+260977123456","symbol":"ZANACO","order_type":"BUY","quantity":10}'
+```
